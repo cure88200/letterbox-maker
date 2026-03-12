@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>レターボックスメーカー</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    :root { 
+      --main-pink: #ff6b81; 
+      --dark-bg: #1a1a1a; 
+      --card-bg: #2d2d2d; 
+      --panel-bg: #363636;
+      --preview-bg: #444; 
+      --text-main: #e0e0e0;
+      --text-sub: #aaa;
+      --border-color: #444;
+      --warning-gold: #ffd700;
+    }
+    
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--dark-bg); color: var(--text-main); padding: 15px; margin: 0; }
+    .container { background: var(--card-bg); padding: 25px; border-radius: 20px; max-width: 600px; margin: 0 auto; box-shadow: 0 15px 50px rgba(0,0,0,0.5); }
+    h2 { text-align: center; font-size: 20px; margin-bottom: 25px; letter-spacing: 2px; color: var(--main-pink); }
+    .setting-section { margin-bottom: 20px; }
+    .label-title { font-weight: bold; font-size: 13px; margin-bottom: 8px; display: block; color: var(--text-sub); }
+    
+    .toggle-group { display: flex; gap: 6px; flex-wrap: wrap; }
+    .toggle-group input[type="radio"] { display: none; }
+    .toggle-group label {
+      padding: 10px 12px; background: var(--panel-bg); color: var(--text-main); border-radius: 20px; font-size: 12px;
+      cursor: pointer; text-align: center; flex: 1; font-weight: bold; transition: 0.2s; min-width: 70px; border: 1px solid var(--border-color);
+    }
+    .toggle-group input[type="radio"]:checked + label { background: var(--main-pink); color: white; border-color: var(--main-pink); box-shadow: 0 4px 10px rgba(255,107,129,0.3); }
+
+    .slider-container { transition: opacity 0.3s; padding: 10px 0; }
+    .slider-container.disabled { opacity: 0.15; pointer-events: none; }
+    input[type="range"] { width: 100%; accent-color: var(--main-pink); cursor: pointer; }
+
+    .file-info { font-size: 12px; color: var(--text-sub); margin-top: 8px; line-height: 1.4; }
+    .process-count { color: var(--main-pink); font-weight: bold; }
+    .warning-text { color: var(--warning-gold); font-weight: bold; }
+
+    .preview-container { margin-top: 25px; background: var(--preview-bg); border-radius: 15px; padding: 10px; border: 1px solid var(--border-color); }
+    .preview-stage { height: 350px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+    canvas { max-width: 100%; max-height: 100%; border-radius: 4px; box-shadow: 0 10px 40px rgba(0,0,0,0.8); border: 1px solid #555; background: #000; }
+    
+    .nav-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding: 10px; color: #fff; }
+    .nav-btn { background: var(--panel-bg); color: var(--text-main); border: 1px solid var(--border-color); padding: 12px 24px; border-radius: 12px; font-size: 14px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+    .nav-btn:disabled { opacity: 0.1; }
+    
+    .status-panel { margin-top: 20px; background: var(--panel-bg); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); font-size: 11px; line-height: 1.6; color: var(--text-sub); }
+    .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .status-item span { font-weight: bold; color: var(--text-main); font-family: monospace; }
+    
+    #downloadBtn { background: var(--main-pink); color: white; border: none; padding: 18px; border-radius: 35px; font-weight: bold; width: 100%; margin-top: 25px; font-size: 16px; cursor: pointer; box-shadow: 0 5px 20px rgba(255,107,129,0.3); transition: 0.3s; }
+    #downloadBtn:disabled { background: #444; color: #777; box-shadow: none; }
+
+    /* クレジット部分 */
+    .footer {
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-sub);
+      margin-top: 30px;
+      padding-bottom: 5px;
+      letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>🎬 レターボックスメーカー</h2>
+  <div class="setting-section">
+    <input type="file" id="fileInput" multiple accept="image/jpeg, image/png">
+    <div id="fileSummary" class="file-info"></div>
+  </div>
+  
+  <div class="setting-section">
+    <span class="label-title">1. 完成画像のアスペクト比</span>
+    <div class="toggle-group">
+      <input type="radio" name="baseSize" id="sizeOrg" value="original" checked>
+      <label for="sizeOrg">元のまま</label>
+      <input type="radio" name="baseSize" id="size11" value="1">
+      <label for="size11">1:1</label>
+      <input type="radio" name="baseSize" id="size43" value="1.333">
+      <label for="size43">4:3</label>
+      <input type="radio" name="baseSize" id="size32" value="1.5">
+      <label for="size32">3:2</label>
+      <input type="radio" name="baseSize" id="size169" value="1.777">
+      <label for="size169">16:9</label>
+    </div>
+  </div>
+
+  <div class="setting-section">
+    <span class="label-title">2. 帯の色</span>
+    <div class="toggle-group">
+      <input type="radio" name="color" id="colorBlack" value="black" checked>
+      <label for="colorBlack">ブラック</label>
+      <input type="radio" name="color" id="colorWhite" value="white">
+      <label for="colorWhite">ホワイト</label>
+    </div>
+  </div>
+
+  <div class="setting-section">
+    <span class="label-title">3. 帯のスタイル</span>
+    <div class="toggle-group">
+      <input type="radio" name="innerStyle" id="styleCinema" value="2.35" checked>
+      <label for="styleCinema">シネスコ</label>
+      <input type="radio" name="innerStyle" id="style169Inner" value="1.777">
+      <label for="style169Inner">16:9</label>
+      <input type="radio" name="innerStyle" id="styleCustom" value="custom">
+      <label for="styleCustom">自由設定</label>
+    </div>
+  </div>
+
+  <div class="setting-section slider-container disabled" id="sliderArea">
+    <span class="label-title">帯の太さ: <span id="barSizeText">10</span>%</span>
+    <input type="range" id="barSizeRange" min="0" max="45" value="10">
+  </div>
+
+  <div class="preview-container">
+    <div class="preview-stage">
+      <canvas id="previewCanvas"></canvas>
+    </div>
+    <div class="nav-controls">
+      <button id="prevBtn" class="nav-btn" disabled>◀ 前へ</button>
+      <span id="pageDisplay" style="font-size:13px; font-weight: bold;">0 / 0</span>
+      <button id="nextBtn" class="nav-btn" disabled>次へ ▶</button>
+    </div>
+  </div>
+
+  <div class="status-panel">
+    <div class="status-grid">
+      <div class="status-item">オリジナル: <span id="origInfo">-</span> (<span id="origRatio">-</span>)</div>
+      <div class="status-item">完成サイズ: <span id="outputInfo">-</span> (<span id="outputRatio">-</span>)</div>
+      <div class="status-item">表示エリア: <span id="innerInfo">-</span> (<span id="innerRatio">-</span>)</div>
+    </div>
+  </div>
+  <button id="downloadBtn" disabled>一括ZIPダウンロード 🚀</button>
+  
+  <div class="footer">@cure88200 with Gemini</div>
+</div>
+
+<script>
+  const fileInput = document.getElementById('fileInput');
+  const fileSummary = document.getElementById('fileSummary');
+  const barSizeRange = document.getElementById('barSizeRange');
+  const barSizeText = document.getElementById('barSizeText');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const pageDisplay = document.getElementById('pageDisplay');
+  const canvas = document.getElementById('previewCanvas');
+  const ctx = canvas.getContext('2d');
+  const sliderArea = document.getElementById('sliderArea');
+  const origInfo = document.getElementById('origInfo');
+  const origRatio = document.getElementById('origRatio');
+  const outputInfo = document.getElementById('outputInfo');
+  const outputRatio = document.getElementById('outputRatio');
+  const innerInfo = document.getElementById('innerInfo');
+  const innerRatio = document.getElementById('innerRatio');
+
+  let images = [];
+  let currentIndex = 0;
+
+  function getRatioString(w, h) {
+    const r = w / h;
+    if (Math.abs(r - 2.35) < 0.02) return "2.35:1";
+    if (Math.abs(r - 1.777) < 0.01) return "16:9";
+    if (Math.abs(r - 1.5) < 0.01) return "3:2";
+    if (Math.abs(r - 1.333) < 0.01) return "4:3";
+    if (Math.abs(r - 1) < 0.01) return "1:1";
+    return r.toFixed(2) + ":1";
+  }
+
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      sliderArea.classList.toggle('disabled', document.querySelector('input[name="innerStyle"]:checked').value !== 'custom');
+      updatePreview();
+    });
+  });
+
+  barSizeRange.addEventListener('input', (e) => { 
+    barSizeText.textContent = e.target.value; 
+    updatePreview(); 
+  });
+
+  fileInput.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files);
+    images = []; currentIndex = 0; let skipped = 0;
+    for (const file of files) {
+      const img = await loadImage(file);
+      if (img.width >= img.height) { images.push({ name: file.name, img }); } else { skipped++; }
+    }
+    if (files.length > 0) {
+      let statusHtml = `加工対象: <span class="process-count">${images.length}枚</span>`;
+      if (skipped > 0) statusHtml += ` <span class="warning-text"> (除外: ${skipped}枚 縦長画像のため)</span>`;
+      fileSummary.innerHTML = statusHtml;
+    } else { fileSummary.innerHTML = ""; }
+    if (images.length > 0) { downloadBtn.disabled = false; updateUI(); } 
+    else { downloadBtn.disabled = true; pageDisplay.textContent = "0 / 0"; ctx.clearRect(0, 0, canvas.width, canvas.height); }
+  });
+
+  function loadImage(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function updateUI() {
+    pageDisplay.textContent = `${currentIndex + 1} / ${images.length}`;
+    prevBtn.disabled = (currentIndex === 0);
+    nextBtn.disabled = (currentIndex === images.length - 1);
+    updatePreview();
+  }
+
+  prevBtn.addEventListener('click', () => { if (currentIndex > 0) { currentIndex--; updateUI(); } });
+  nextBtn.addEventListener('click', () => { if (currentIndex < images.length - 1) { currentIndex++; updateUI(); } });
+
+  function processCanvas(img, targetCtx, isPreview = false) {
+    const baseVal = document.querySelector('input[name="baseSize"]:checked').value;
+    const styleVal = document.querySelector('input[name="innerStyle"]:checked').value;
+    const color = document.querySelector('input[name="color"]:checked').value;
+    const barPercent = parseInt(barSizeRange.value) / 100;
+    let canvasW = img.width;
+    let canvasH = (baseVal === 'original') ? img.height : canvasW / parseFloat(baseVal);
+    targetCtx.canvas.width = canvasW;
+    targetCtx.canvas.height = canvasH;
+    targetCtx.fillStyle = color;
+    targetCtx.fillRect(0, 0, canvasW, canvasH);
+    let contentW = canvasW;
+    let contentH = (styleVal === 'custom') ? canvasH * (1 - barPercent * 2) : canvasW / parseFloat(styleVal);
+    if (contentH > canvasH) contentH = canvasH;
+    const imgRatio = img.width / img.height;
+    const targetRatio = contentW / contentH;
+    let sx, sy, sw, sh;
+    if (imgRatio > targetRatio) { sh = img.height; sw = img.height * targetRatio; sx = (img.width - sw) / 2; sy = 0; }
+    else { sw = img.width; sh = img.width / targetRatio; sx = 0; sy = (img.height - sh) / 2; }
+    const dy = (canvasH - contentH) / 2;
+    targetCtx.drawImage(img, sx, sy, sw, sh, 0, dy, contentW, contentH);
+    if (isPreview) {
+      origInfo.textContent = `${img.width}×${img.height}`;
+      origRatio.textContent = getRatioString(img.width, img.height);
+      outputInfo.textContent = `${Math.round(canvasW)}×${Math.round(canvasH)}`;
+      outputRatio.textContent = getRatioString(canvasW, canvasH);
+      innerInfo.textContent = `${Math.round(contentW)}×${Math.round(contentH)}`;
+      innerRatio.textContent = getRatioString(contentW, contentH);
+    }
+  }
+
+  function updatePreview() { if (images.length > 0) processCanvas(images[currentIndex].img, ctx, true); }
+
+  downloadBtn.addEventListener('click', async () => {
+    downloadBtn.textContent = '生成中... 🚀'; downloadBtn.disabled = true;
+    const zip = new JSZip();
+    const offCanvas = document.createElement('canvas');
+    const offCtx = offCanvas.getContext('2d');
+    for (let i = 0; i < images.length; i++) {
+      processCanvas(images[i].img, offCtx);
+      zip.file(`output_${i + 1}.jpg`, offCanvas.toDataURL('image/jpeg', 0.9).split(',')[1], { base64: true });
+    }
+    const now = new Date();
+    const timeStr = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0') + now.getSeconds().toString().padStart(2, '0');
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `LetterBoxPhoto_${timeStr}.zip`;
+    a.click();
+    downloadBtn.textContent = '一括ZIPダウンロード 🚀'; downloadBtn.disabled = false;
+  });
+</script>
+</body>
+</html>
+
